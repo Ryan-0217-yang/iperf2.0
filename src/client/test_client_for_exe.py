@@ -29,7 +29,44 @@ def check_version():
         print("Connection error:", e)
         return None
 
+
+
+def cleanup_old_exe():
+
+    if getattr(sys, 'frozen', False):  
+        old_backup = sys.executable + ".old"
+        if os.path.exists(old_backup):
+            try:
+                os.remove(old_backup)
+                print("已清除上次更新殘留的備份檔")
+            except OSError as e:
+                print("清除備份檔失敗（可忽略）：", e)
+
+
+
 def download(url, extract_to="."):
+    old_exe = None
+    backup_exe = None
+
+    if getattr(sys, 'frozen', False): 
+        old_exe = sys.executable
+        backup_exe = old_exe + ".old"
+
+
+        if os.path.exists(backup_exe):
+            try:
+                os.remove(backup_exe)
+            except OSError:
+                pass 
+
+        try:
+            os.rename(old_exe, backup_exe)
+            print(f"已將現有 exe 改名為 {backup_exe}，準備解壓新版本")
+        except OSError as e:
+            print("rename 舊 exe 失敗：", e)
+            return False
+
+
     try:
         r = requests.get(url, timeout=10)
         r.raise_for_status()
@@ -43,16 +80,29 @@ def download(url, extract_to="."):
 
     except Exception as e:
         print("Error:", e)
+
+
+        if old_exe and backup_exe and os.path.exists(backup_exe):
+            try:
+                os.rename(backup_exe, old_exe)
+                print("解壓失敗，已還原舊版本 exe")
+            except OSError as restore_err:
+                print("還原舊版本 exe 失敗：", restore_err)
+
+
         return False
 
+
 if __name__ == "__main__":
+    cleanup_old_exe() 
+
     result = check_version()
 
     if result == "Need update":
         print("Client needs to update")
-        download(f"{SERVER_BASE_URL}/download")
+        download(f"{SERVER_BASE_URL}/download", extract_to=BASE_DIR)
     elif result == "OK":
-        print("Client is up-to-date")
+        print(f"Client is up-to-date. this version is {CLIENT_VERSION}")
         run_client(HOST_IP, 8000, 1)
     else:
         print(f"Unknown response or error: {result}")
